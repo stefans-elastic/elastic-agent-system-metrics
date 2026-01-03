@@ -463,3 +463,51 @@ func fillIdleProcess(state ProcState) (ProcState, error) {
 	state.CPU.Total.Value = opt.FloatWith(idle)
 	return state, nil
 }
+
+type ProcessMemoryCountersEx2 struct {
+	cb                         uint32
+	PageFaultCount             uint32
+	PeakWorkingSetSize         uintptr
+	WorkingSetSize             uintptr
+	QuotaPeakPagedPoolUsage    uintptr
+	QuotaPagedPoolUsage        uintptr
+	QuotaPeakNonPagedPoolUsage uintptr
+	QuotaNonPagedPoolUsage     uintptr
+	PagefileUsage              uintptr
+	PeakPagefileUsage          uintptr
+	PrivateUsage               uintptr
+	PrivateWorkingSetSize      uintptr
+	SharedCommitUsage          uintptr
+}
+
+func procSwap(pid int) (uint64, error) {
+	handle, err := syscall.OpenProcess(
+		windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_VM_READ,
+		false,
+		uint32(pid))
+	if err != nil {
+		return 0, fmt.Errorf("OpenProcess failed for pid=%v: %w", pid, err)
+	}
+	defer func() {
+		_ = syscall.CloseHandle(handle)
+	}()
+
+	var memInfo ProcessMemoryCountersEx2
+	memInfo.cb = uint32(unsafe.Sizeof(memInfo))
+
+	r1, _, err := procGetMemInfo.Call(
+		uintptr(handle),
+		uintptr(unsafe.Pointer(&memInfo)),
+		uintptr(memInfo.cb),
+	)
+
+	if err != nil {
+		return 0, fmt.Errorf("GetProcessMemoryInfo failed for pid=%v: %w", pid, err)
+	}
+
+	if memInfo.PrivateWorkingSetSize > 0 && memInfo.PrivateUsage > memInfo.PrivateWorkingSetSize {
+		return uint64(memInfo.PrivateUsage - memInfo.PrivateWorkingSetSize), nil
+	}
+
+	return 0, nil
+}

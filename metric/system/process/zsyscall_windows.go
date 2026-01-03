@@ -61,6 +61,7 @@ var (
 	procPssCaptureSnapshot = modkernel32.NewProc("PssCaptureSnapshot")
 	procPssQuerySnapshot   = modkernel32.NewProc("PssQuerySnapshot")
 	procPssFreeSnapshot    = modkernel32.NewProc("PssFreeSnapshot")
+	procGetMemInfo = modkernel32.NewProc("K32GetProcessMemoryInfo")
 )
 
 func PssCaptureSnapshot(processHandle syscall.Handle, captureFlags PSSCaptureFlags, threadContextFlags uint32, snapshotHandle *syscall.Handle) (err error) {
