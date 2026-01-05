@@ -165,6 +165,11 @@ func FillPidMetrics(_ resolve.Resolver, pid int, state ProcState, _ func(string)
 	state.Memory.Rss.Bytes = opt.UintWith(wss)
 	state.Memory.Size = opt.UintWith(size)
 
+	swap, err := procSwap(pid)
+	if err == nil {
+		state.Memory.Swap = opt.UintWith(swap)
+	}
+
 	userTime, sysTime, startTime, err := getProcTimes(pid)
 	if err != nil {
 		return state, fmt.Errorf("error getting CPU times: %w", err)
@@ -495,14 +500,14 @@ func procSwap(pid int) (uint64, error) {
 	var memInfo ProcessMemoryCountersEx2
 	memInfo.cb = uint32(unsafe.Sizeof(memInfo))
 
-	r1, _, err := procGetMemInfo.Call(
+	r1, _, e1 := procGetMemInfo.Call(
 		uintptr(handle),
 		uintptr(unsafe.Pointer(&memInfo)),
 		uintptr(memInfo.cb),
 	)
 
-	if err != nil {
-		return 0, fmt.Errorf("GetProcessMemoryInfo failed for pid=%v: %w", pid, err)
+	if r1 != nil {
+		return 0, fmt.Errorf("GetProcessMemoryInfo failed for pid=%v: %w", pid, errnoErr(e1))
 	}
 
 	if memInfo.PrivateWorkingSetSize > 0 && memInfo.PrivateUsage > memInfo.PrivateWorkingSetSize {
