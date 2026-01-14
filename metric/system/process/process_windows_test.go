@@ -19,6 +19,7 @@ package process
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,4 +83,11 @@ func TestLsassFound(t *testing.T) {
 			require.Contains(t, processNames, state.Name)
 		}
 	}
+}
+
+func Test_procSwap(t *testing.T) {
+	pid := os.Getpid()
+	swap, err := procSwap(pid)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, swap, uint64(0))
 }

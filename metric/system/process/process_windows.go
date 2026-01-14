@@ -469,6 +469,7 @@ func fillIdleProcess(state ProcState) (ProcState, error) {
 	return state, nil
 }
 
+// ProcessMemoryCountersEx2 go definition of PROCESS_MEMORY_COUNTERS_EX2 struct (doc: https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex2)
 type ProcessMemoryCountersEx2 struct {
 	cb                         uint32
 	PageFaultCount             uint32
@@ -485,6 +486,12 @@ type ProcessMemoryCountersEx2 struct {
 	SharedCommitUsage          uintptr
 }
 
+// procSwap returns how much swap memory given process (PID) is using (in bytes).
+// It uses data retrieved from K32GetProcessMemoryInfo function provided by kernel32.dll(https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getprocessmemoryinfo). The function returns counters in the form of PROCESS_MEMORY_COUNTERS_EX2 structure.
+// The reason PROCESS_MEMORY_COUNTERS_EX is not sufficient is that it lacks PrivateWorkingSetSize counter which is required for the calculation.
+// Overall formula is: swap = PrivateUsage - PrivateWorkingSetSize
+// PrivateUsage - the Commit Charge value in bytes for this process. Judging from https://en.wikipedia.org/wiki/Commit_charge it's phisical memory + page file.
+// PrivateWorkingSetSize - the current private working set size (phisical memory).
 func procSwap(pid int) (uint64, error) {
 	handle, err := syscall.OpenProcess(
 		windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_VM_READ,
@@ -500,14 +507,14 @@ func procSwap(pid int) (uint64, error) {
 	var memInfo ProcessMemoryCountersEx2
 	memInfo.cb = uint32(unsafe.Sizeof(memInfo))
 
-	r1, _, e1 := procGetMemInfo.Call(
+	r1, _, err := procGetMemInfo.Call(
 		uintptr(handle),
 		uintptr(unsafe.Pointer(&memInfo)),
 		uintptr(memInfo.cb),
 	)
 
-	if r1 != nil {
-		return 0, fmt.Errorf("GetProcessMemoryInfo failed for pid=%v: %w", pid, errnoErr(e1))
+	if r1 == 0 {
+		return 0, fmt.Errorf("procSwap failed for pid=%v: %w", pid, err)
 	}
 
 	if memInfo.PrivateWorkingSetSize > 0 && memInfo.PrivateUsage > memInfo.PrivateWorkingSetSize {
